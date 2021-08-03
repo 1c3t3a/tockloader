@@ -1,8 +1,6 @@
 '''
 Interface for boards using Segger's JLinkExe program.
-
 All communication with the board is done using JLinkExe commands and scripts.
-
 Different MCUs require different command line arguments so that the JLinkExe
 tool knows which JTAG interface it is talking to. Since we don't want to burden
 the user with specifying the board each time, we default to using a generic
@@ -175,7 +173,7 @@ class JLinkExe(BoardInterface):
 			stdout = p.stdout.decode('utf-8')
 			if 'USB...FAILED' in stdout:
 				raise TockLoaderException('ERROR: Cannot find JLink hardware. Is USB attached?')
-			if 'Can not connect to target.' in stdout:
+			if 'Can not connect to target.' in stdout or 'Cannot connect to target.' in stdout:
 				raise TockLoaderException('ERROR: Cannot find device. Is JTAG connected?')
 			if 'Error while programming flash' in stdout:
 				raise TockLoaderException('ERROR: Problem flashing.')
@@ -367,13 +365,34 @@ class JLinkExe(BoardInterface):
 		'''
 		Use JLinkRTTClient to listen for RTT messages.
 		'''
-		if self.jlink_device == None:
+		if self.board and self.board in self.KNOWN_BOARDS:
+			board = self.KNOWN_BOARDS[self.board]
+
+			self.jlink_device = board['jlink_device']
+
+			if self.jlink_device == 'cortex-m0':
+				if 'jlink_device' in board:
+					self.jlink_device = board['jlink_device']
+
+			# Set optional settings
+			if 'jlink_if' in board:
+				self.jlink_if = board['jlink_if']
+			else: 
+				self.jlink_if = 'swd'
+			if 'jlink_speed' in board:
+				self.jlink_speed = board['jlink_speed']
+			else: 
+				self.jlink_speed = 1200
+
+
+		if self.jlink_device and self.jlink_device == None:
 			logging.error('Unknown jlink_device. Use the --board or --jlink-device options.')
 			return
 
 		logging.status('Starting JLinkExe JTAG connection.')
-		jtag_p = subprocess.Popen('{} -device {} -if {} -speed {} -autoconnect 1 -jtagconf -1,-1'.format(
-                    self.jlink_cmd, self.jlink_device, self.jlink_if, self.jlink_speed).split(),
+		print('{} -device {} -if {} -speed {} -autoconnect 1 -jtagconf -1,-1'.format(
+                    self.jlink_cmd, self.jlink_device, self.jlink_if, self.jlink_speed))
+		jtag_p = subprocess.Popen('JLinkExe -device nRF52840_xxAA -if swd -speed 1200 -autoconnect 1 -jtagconf -1,-1'.split(),
 			stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 		# Delay to give the JLinkExe JTAG connection time to start before running
